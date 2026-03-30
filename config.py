@@ -20,13 +20,13 @@ from scipy.interpolate import interp1d, RectBivariateSpline, splrep
 
 ########################## user control #################################
 
-#---cosmology 
-h = 0.7
-Om = 0.3
-Ob = 0.0465
-OL = 0.7
-s8 = 0.8
-ns = 1.
+#---cosmology (TNG-Cluster / Planck 2015 values)
+h = 0.6774
+Om = 0.3089
+Ob = 0.0486
+OL = 0.6911
+s8 = 0.8159
+ns = 0.9667
 
 # COCO simulation values
 #h = 0.704

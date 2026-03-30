@@ -12,10 +12,71 @@ import config as cfg
 import numpy as np
 from scipy.integrate import quad
 from scipy.optimize import brentq
-import cosmolopy.distance as cdis
-import cosmolopy.density as cden
-import cosmolopy.constants as cc
-import cosmolopy.perturbation as cper
+
+#########################################################################
+# Native replacements for cosmolopy functions (cosmolopy no longer
+# builds on modern Python).  Only two functions are needed:
+#   1. Linear growth factor  D(z)  — Carroll, Press & Turner (1992)
+#   2. Transfer function T(k)      — Eisenstein & Hu (1998) no-wiggle
+#########################################################################
+
+def _fgrowth(z, omega_M_0):
+    """Linear growth factor D(z)/D(0), Carroll, Press & Turner 1992."""
+    omega_lambda_0 = 1.0 - omega_M_0  # flat Universe
+    def _g(om, ol):
+        return 2.5 * om / (om**(4./7.) - ol + (1.+om/2.)*(1.+ol/70.))
+    Ez2 = omega_M_0*(1.+z)**3 + omega_lambda_0
+    omz = omega_M_0*(1.+z)**3 / Ez2
+    olz = omega_lambda_0 / Ez2
+    return _g(omz, olz) / (1.+z) / _g(omega_M_0, omega_lambda_0)
+
+def _transfer_function_EH(k_Mpc, **cosmo):
+    """
+    Eisenstein & Hu (1998 ApJ 496 605) zero-baryon (no-wiggle) transfer
+    function.  Equations 29-31.
+
+    Parameters
+    ----------
+    k_Mpc : float or array
+        Wavenumber in Mpc^-1 (same convention as cosmolopy).
+
+    Returns
+    -------
+    (T0, 0) : tuple
+        Transfer function value and a dummy (matches cosmolopy interface).
+    """
+    h   = cosmo['h']
+    Om  = cosmo['omega_M_0']
+    Ob  = cosmo.get('omega_b_0', 0.0)
+    Th  = 2.7255 / 2.7           # Theta_2.7 = T_CMB / 2.7 K
+
+    omh2 = Om * h**2
+    obh2 = Ob * h**2
+
+    # Sound horizon  (Eq. 26)
+    s = 44.5 * np.log(9.83 / omh2) / np.sqrt(1.0 + 10.0 * obh2**0.75)
+
+    # Alpha_Gamma  (Eq. 31)
+    fb = Ob / Om if Om > 0 else 0.0
+    alpha_gamma = (1.0
+                   - 0.328 * np.log(431.0 * omh2) * fb
+                   + 0.38  * np.log(22.3  * omh2) * fb**2)
+
+    # Effective shape parameter Gamma_eff  (Eq. 30)
+    k_hmpc = k_Mpc / h                  # convert Mpc^-1 → h Mpc^-1
+    Gamma_eff = Om * h * (alpha_gamma
+                          + (1.0 - alpha_gamma)
+                            / (1.0 + (0.43 * k_hmpc * s)**4))
+
+    # Dimensionless wavenumber  (Eq. 28 re-expressed via Gamma_eff)
+    q = k_hmpc * Th**2 / Gamma_eff
+
+    # Transfer function  (Eq. 29)
+    L0 = np.log(2.0 * np.e + 1.8 * q)
+    C0 = 14.2 + 731.0 / (1.0 + 62.5 * q)
+    T0 = L0 / (L0 + C0 * q**2)
+
+    return T0, 0
 
 #########################################################################
 
@@ -327,7 +388,7 @@ def D(z,Om=0.3):
         Om: matter density in units of the critical density, at z=0
             (default=0.3) 
     """
-    return cper.fgrowth(z,Om) 
+    return _fgrowth(z,Om)
 
 # transfer function    
 def T(k, **cosmo):
@@ -350,7 +411,7 @@ def T(k, **cosmo):
     """ 
     h = cosmo['h']
     k = h*k # CosmoloPy takes k in [Mpc^-1]
-    Ttmp = cper.transfer_function_EH(k, **cosmo)[0]
+    Ttmp = _transfer_function_EH(k, **cosmo)[0]
     if 'm_WDM' in cosmo:
         a = 0.05 * cosmo['m_WDM']**(-1.15) * \
             (cosmo['omega_M_0']/0.4)**0.15 * \
