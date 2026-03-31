@@ -11,7 +11,25 @@ import cosmo as co
 import profiles as pr
 
 import numpy as np
-from scipy.interpolate import interp1d,interp2d
+from scipy.interpolate import interp1d, RegularGridInterpolator
+
+
+def _make_bilinear(x_grid, y_grid, z_mesh):
+    """
+    Build a bilinear interpolator callable as f(x, y) → float.
+    Replaces interp2d (removed in SciPy 1.14) for the small EPW18 grids.
+    x_grid: 1-D (Nx,), y_grid: 1-D (Ny,), z_mesh: (Ny, Nx) — same layout
+    as the old interp2d convention so existing call sites are unchanged.
+    """
+    ix  = np.argsort(x_grid)
+    iy  = np.argsort(y_grid)
+    rgi = RegularGridInterpolator(
+        (x_grid[ix], y_grid[iy]),
+        z_mesh[np.ix_(iy, ix)].T,      # shape (Nx, Ny)
+        method='linear', bounds_error=False, fill_value=None)
+    def f(x, y):
+        return float(rgi([[float(x), float(y)]]))
+    return f
 from scipy.optimize import brentq
 
 #########################################################################
@@ -91,18 +109,18 @@ mu_mstar_mesh_EPW18 = np.array([[1.39,1.87,2.35,2.83],
     [1.68,1.8,1.93,2.05]])
 eta_mstar_mesh_EPW18 = np.array([[1.39,1.87,2.35,2.83],
     [1.68,1.8,1.93,2.05]])
-lgxs_leff_interp_EPW18 = interp2d(alpha_grid_EPW18,lefflmax_grid_EPW18,
-    lgxs_leff_mesh_EPW18,kind='linear')
-mu_leff_interp_EPW18 = interp2d(alpha_grid_EPW18,lefflmax_grid_EPW18,
-    mu_leff_mesh_EPW18,kind='linear')
-eta_leff_interp_EPW18 = interp2d(alpha_grid_EPW18,lefflmax_grid_EPW18,
-    eta_leff_mesh_EPW18,kind='linear')
-lgxs_mstar_interp_EPW18 = interp2d(alpha_grid_EPW18,lefflmax_grid_EPW18,
-    lgxs_mstar_mesh_EPW18,kind='linear')
-mu_mstar_interp_EPW18 = interp2d(alpha_grid_EPW18,lefflmax_grid_EPW18,
-    mu_mstar_mesh_EPW18,kind='linear')
-eta_mstar_interp_EPW18 = interp2d(alpha_grid_EPW18,lefflmax_grid_EPW18,
-    eta_mstar_mesh_EPW18,kind='linear')
+lgxs_leff_interp_EPW18  = _make_bilinear(alpha_grid_EPW18, lefflmax_grid_EPW18,
+    lgxs_leff_mesh_EPW18)
+mu_leff_interp_EPW18    = _make_bilinear(alpha_grid_EPW18, lefflmax_grid_EPW18,
+    mu_leff_mesh_EPW18)
+eta_leff_interp_EPW18   = _make_bilinear(alpha_grid_EPW18, lefflmax_grid_EPW18,
+    eta_leff_mesh_EPW18)
+lgxs_mstar_interp_EPW18 = _make_bilinear(alpha_grid_EPW18, lefflmax_grid_EPW18,
+    lgxs_mstar_mesh_EPW18)
+mu_mstar_interp_EPW18   = _make_bilinear(alpha_grid_EPW18, lefflmax_grid_EPW18,
+    mu_mstar_mesh_EPW18)
+eta_mstar_interp_EPW18  = _make_bilinear(alpha_grid_EPW18, lefflmax_grid_EPW18,
+    eta_mstar_mesh_EPW18)
 def g_EPW18(x,alpha=1.,lefflmax=0.1):
     """
     Errani, Penerrubia, & Walker (2018) tidal tracks, i.e., the evolution
