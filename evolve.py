@@ -28,7 +28,7 @@ def _make_bilinear(x_grid, y_grid, z_mesh):
         z_mesh[np.ix_(iy, ix)].T,      # shape (Nx, Ny)
         method='linear', bounds_error=False, fill_value=None)
     def f(x, y):
-        return float(rgi([[float(x), float(y)]]))
+        return float(rgi([[float(x), float(y)]])[0])
     return f
 from scipy.optimize import brentq
 
